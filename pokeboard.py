@@ -146,9 +146,11 @@ selected_pokemon_name = st.session_state.selected_pokemon[
 chart = radar_chart(poke_data, selected_pokemon_name)
 pokemon_api_data = fetch_pokemon_data(selected_pokemon_name)
 
-tab1, tab2, tab3 = st.tabs(["Overview", "Match-up", "Statistics"])
+overview, match_up, statistics, IV_calculator = st.tabs(
+    ["Overview", "Match-up", "Statistics", "IV_calculator"]
+)
 
-with tab1:
+with overview:
     st.selectbox(
         "Select a Pokémon",
         language_data[language]["name_list"],
@@ -201,7 +203,7 @@ with tab1:
                 info_cols[1].markdown(f"{type2}")
 
 
-with tab2:
+with match_up:
     with st.container(key="match-up", horizontal=True):
         with st.container(key="dropdowns", horizontal=True):
             st.selectbox(
@@ -267,8 +269,6 @@ with tab2:
             header_cols[2].markdown(f"**{second_pokemon_name}**")
 
             for stat in stats:
-                # TODO add type comparison handling
-
                 stat1 = first_pokemon.iloc[0][stat]
                 stat2 = second_pokemon.iloc[0][stat]
 
@@ -322,5 +322,147 @@ with tab2:
                     unsafe_allow_html=True,
                 )
 
-with tab3:
+with statistics:
     st.markdown("### Statistics")
+
+with IV_calculator:
+    st.header("Pokémon IV Calculator")
+
+    stats = [
+        "hp",
+        "attack",
+        "defense",
+        "sp_attack",
+        "sp_defense",
+        "speed",
+    ]
+
+    # Map display labels to dataframe columns
+    STAT_COLUMN_MAP = {
+        "HP": "hp",
+        "Attack": "attack",
+        "Defense": "defense",
+        "Sp. Attack": "sp_attack",
+        "Sp. Defense": "sp_defense",
+        "Speed": "speed",
+    }
+
+    st.header("Pokémon IV / EV Calculator (Radar View)")
+
+    # ---- Inputs: Pokémon selection ----
+    pokemon_name = st.selectbox("Pokémon", sorted(poke_data["name"].unique()))
+
+    # ---- Lookup row ----
+    try:
+        row = poke_data.loc[poke_data["name"] == pokemon_name].iloc[0]
+    except IndexError:
+        st.error("Selected Pokémon not found in the base stats table.")
+        st.stop()
+
+    # ---- IV & EV inputs per stat ----
+    st.subheader("IV and EV Inputs (per stat)")
+
+    iv_values = {}
+    ev_values = {}
+    cols_iv = st.columns(6)
+    cols_ev = st.columns(6)
+
+    # IVs
+    for i, stat in enumerate(stats):
+        with cols_iv[i]:
+            iv_values[stat] = st.number_input(
+                f"{STAT_LABELS[stat]} IV",
+                min_value=0,
+                max_value=31,
+                value=31,
+                step=1,
+            )
+
+    # EVs
+    for i, stat in enumerate(stats):
+        with cols_ev[i]:
+            ev_values[stat] = st.number_input(
+                f"{STAT_LABELS[stat]} EV",
+                min_value=0,
+                max_value=252,
+                value=0,
+                step=4,
+            )
+
+    # ---- Compute modified stats (simplified model) ----
+    # Simplified formula: modified = base + IV + floor(EV / 4)
+    base_stats = []
+    modified_stats = []
+    labels = []
+
+    for stat in stats:
+        base_val = int(row[stat])
+        iv = iv_values[stat]
+        ev = ev_values[stat]
+
+        delta_from_iv = iv
+        delta_from_ev = ev // 4
+
+        modified_val = base_val + delta_from_iv + delta_from_ev
+
+        base_stats.append(base_val)
+        modified_stats.append(modified_val)
+        labels.append(STAT_LABELS[stat])
+
+    # Close the radar loop (first point repeated at end)
+    radar_labels = labels + labels[:1]
+    radar_base = base_stats + base_stats[:1]
+    radar_modified = modified_stats + modified_stats[:1]
+
+    # ---- Radar chart ----
+    st.subheader("Stat Distribution (Radar Chart)")
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatterpolar(
+            r=radar_base,
+            theta=radar_labels,
+            fill="toself",
+            name="Base stats",
+            opacity=0.5,
+        )
+    )
+
+    fig.add_trace(
+        go.Scatterpolar(
+            r=radar_modified,
+            theta=radar_labels,
+            fill="toself",
+            name="With IV + EV",
+            opacity=0.5,
+        )
+    )
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, max(radar_modified) * 1.1],
+            )
+        ),
+        showlegend=True,
+        margin=dict(l=40, r=40, t=40, b=40),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ---- Optional: show numeric table ----
+    st.subheader("Numeric Comparison")
+    comparison_rows = []
+    for label, base, mod in zip(labels, base_stats, modified_stats):
+        comparison_rows.append(
+            {
+                "Stat": label,
+                "Base": base,
+                "With IV + EV": mod,
+                "Change": mod - base,
+            }
+        )
+
+    st.table(comparison_rows)
