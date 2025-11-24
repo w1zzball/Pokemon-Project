@@ -1,7 +1,15 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-from utils.api import fetch_back_sprite, fetch_pokemon_data, fetch_front_sprite
+from utils.api import (
+    fetch_back_sprite,
+    fetch_pokemon_data,
+    fetch_front_sprite,
+    fetch_pokemon_moves,
+    fetch_move_contest_data,
+    fetch_pokemon_contest_moves,
+    filter_contest_moves_by_type,
+)
 from utils.type_utils import type_effectiveness
 import plotly.graph_objects as go
 import math
@@ -210,8 +218,8 @@ if apply_nature_filter:
 chart = radar_chart(poke_data, selected_pokemon_name, modifiers)
 pokemon_api_data = fetch_pokemon_data(selected_pokemon_name)
 
-overview, match_up, IV_calculator = st.tabs(
-    ["Overview", "Match-up", "IV Calculator"]
+overview, match_up, IV_calculator, competition = st.tabs(
+    ["Overview", "Match-up", "IV Calculator", "Competition"]
 )
 
 with overview:
@@ -605,3 +613,76 @@ with IV_calculator:
         )
 
     st.table(comparison_rows)
+
+
+with competition:  # Heasder
+    st.markdown("### Competition")
+
+    # Give a brief explanation of contest mechanics
+    st.markdown(
+        "**Appeal** = points earned in the contest round<br>"
+        "**Jam** = how much the move disrupts opponents<br>"
+        "**Use After / Use Before** = recommended move combos",
+        unsafe_allow_html=True,
+    )
+    # Select the pokemon
+    selected_pokemon_comp = st.selectbox(
+        "Select a Pokémon",
+        language_data[language]["name_list"],
+        key="competition_pokemon_name",
+    )
+    # Convert to english name for API calls
+    selected_pokemon_eng = poke_data[
+        poke_data[language_data[language]["column"]] == selected_pokemon_comp
+    ]["name"].iloc[0]
+
+    # Contest type selection
+    contest_types = ["cool", "beauty", "cute", "smart", "tough"]
+    # User choice of contest type
+    contest_choice = st.selectbox(
+        "Select contest type",
+        contest_types,
+        index=0,
+        key="contest_type_choice",
+    )
+    # Display header
+    st.markdown(
+        f"#### {selected_pokemon_eng} in {contest_choice.capitalize()} contests"
+    )
+    # Fetch contest moves for the selected pokemon
+    contest_moves = fetch_pokemon_contest_moves(selected_pokemon_eng)
+    filtered_moves = filter_contest_moves_by_type(
+        contest_moves, contest_choice
+    )
+
+    # If no moves found, display message
+    if len(filtered_moves) == 0:
+        st.markdown("No moves found for this contest type.")
+    else:
+        formatted_rows = []
+
+        # Format the moves for display
+        for move in filtered_moves:
+            use_after_list = move["combos"]["use_after"]
+            use_before_list = move["combos"]["use_before"]
+
+            formatted_rows.append(
+                {
+                    "Move": move["move_name"],
+                    "Appeal": move["appeal"],
+                    "Jam": move["jam"],
+                    "Use After": (
+                        ", ".join(use_after_list) if use_after_list else "None"
+                    ),
+                    "Use Before": (
+                        ", ".join(use_before_list)
+                        if use_before_list
+                        else "None"
+                    ),
+                }
+            )
+
+        df = pd.DataFrame(formatted_rows)
+        df = df[["Move", "Appeal", "Jam", "Use After", "Use Before"]]
+        df.set_index("Move", inplace=True)
+        st.dataframe(df, use_container_width=True)
