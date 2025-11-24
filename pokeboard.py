@@ -210,8 +210,8 @@ if apply_nature_filter:
 chart = radar_chart(poke_data, selected_pokemon_name, modifiers)
 pokemon_api_data = fetch_pokemon_data(selected_pokemon_name)
 
-overview, match_up, statistics, IV_calculator = st.tabs(
-    ["Overview", "Match-up", "Statistics", "IV Calculator"]
+overview, match_up, IV_calculator = st.tabs(
+    ["Overview", "Match-up", "IV Calculator"]
 )
 
 with overview:
@@ -406,8 +406,6 @@ with match_up:
                     unsafe_allow_html=True,
                 )
 
-with statistics:
-    st.markdown("### Statistics")
 
 with IV_calculator:
 
