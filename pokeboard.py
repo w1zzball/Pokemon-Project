@@ -56,6 +56,38 @@ stats_list = [
     "weight_kg",
 ]
 
+STAT_KEYS = stats_list[:-4]
+NEUTRAL_MODIFIERS = {key: 1.0 for key in STAT_KEYS}
+DEFAULT_NATURE = "Neutral"
+NATURE_MODIFIERS = {
+    "Neutral": {},
+    "Hardy": {},
+    "Docile": {},
+    "Serious": {},
+    "Bashful": {},
+    "Quirky": {},
+    "Lonely": {"attack": 1.1, "defense": 0.9},
+    "Brave": {"attack": 1.1, "speed": 0.9},
+    "Adamant": {"attack": 1.1, "sp_attack": 0.9},
+    "Naughty": {"attack": 1.1, "sp_defense": 0.9},
+    "Bold": {"defense": 1.1, "attack": 0.9},
+    "Relaxed": {"defense": 1.1, "speed": 0.9},
+    "Impish": {"defense": 1.1, "sp_attack": 0.9},
+    "Lax": {"defense": 1.1, "sp_defense": 0.9},
+    "Timid": {"speed": 1.1, "attack": 0.9},
+    "Hasty": {"speed": 1.1, "defense": 0.9},
+    "Jolly": {"speed": 1.1, "sp_attack": 0.9},
+    "Naive": {"speed": 1.1, "sp_defense": 0.9},
+    "Modest": {"sp_attack": 1.1, "attack": 0.9},
+    "Mild": {"sp_attack": 1.1, "defense": 0.9},
+    "Quiet": {"sp_attack": 1.1, "speed": 0.9},
+    "Rash": {"sp_attack": 1.1, "sp_defense": 0.9},
+    "Calm": {"sp_defense": 1.1, "attack": 0.9},
+    "Gentle": {"sp_defense": 1.1, "defense": 0.9},
+    "Sassy": {"sp_defense": 1.1, "speed": 0.9},
+    "Careful": {"sp_defense": 1.1, "sp_attack": 0.9},
+}
+NATURE_OPTIONS = list(NATURE_MODIFIERS.keys())
 
 # sidebar
 st.sidebar.title("Settings")
@@ -65,9 +97,20 @@ language = st.sidebar.selectbox(
     "Select language", ["English", "Deutsch", "日本語"], index=0
 )
 
+# Nature filter
+apply_nature_filter = st.sidebar.checkbox("Apply nature filter", value=False)
+if apply_nature_filter:
+    selected_nature = st.sidebar.selectbox(
+        "Nature",
+        NATURE_OPTIONS,
+        index=NATURE_OPTIONS.index(DEFAULT_NATURE),
+    )
+else:
+    selected_nature = DEFAULT_NATURE
+
 
 # plotly radar
-def radar_chart(df, selected_pokemon_name):
+def radar_chart(df, selected_pokemon_name, modifiers):
     pokemon = df[
         df[language_data[language]["column"]] == selected_pokemon_name
     ]
@@ -79,7 +122,11 @@ def radar_chart(df, selected_pokemon_name):
         f"sp_defense{'' if not normalise else '_norm'}",
         f"speed{'' if not normalise else '_norm'}",
     ]
-    values = [pokemon[cat].iloc[0] for cat in categories]
+    values = []
+    for cat in categories:
+        base_value = pokemon[cat].iloc[0]
+        base_stat = cat.replace("_norm", "")
+        values.append(base_value * modifiers.get(base_stat, 1.0))
 
     fig = px.line_polar(
         r=values,
@@ -156,7 +203,11 @@ selected_pokemon_name = st.session_state.selected_pokemon[
     language_data[language]["column"]
 ].iloc[0]
 
-chart = radar_chart(poke_data, selected_pokemon_name)
+modifiers = NEUTRAL_MODIFIERS.copy()
+if apply_nature_filter:
+    modifiers.update(NATURE_MODIFIERS.get(selected_nature, {}))
+
+chart = radar_chart(poke_data, selected_pokemon_name, modifiers)
 pokemon_api_data = fetch_pokemon_data(selected_pokemon_name)
 
 overview, match_up, statistics, IV_calculator = st.tabs(
@@ -227,6 +278,13 @@ with overview:
                 )
 
                 st.table(info_df)
+                with st.container(border=True):
+                    filter_text = (
+                        f"Nature filter: {selected_nature}"
+                        if apply_nature_filter
+                        else "No filters applied"
+                    )
+                    st.markdown(filter_text)
 
 
 with match_up:
@@ -354,7 +412,12 @@ with statistics:
 with IV_calculator:
 
     def compute_stat(
-        base: int, iv: int, ev: int, level: int, is_hp: bool
+        base: int,
+        iv: int,
+        ev: int,
+        level: int,
+        is_hp: bool,
+        nature_multiplier: float = 1.0,
     ) -> int:
         ev_term = ev // 4
         if is_hp:
@@ -364,7 +427,11 @@ with IV_calculator:
                 + 10
             )
         else:
-            return math.floor(((2 * base + iv + ev_term) * level) / 100) + 5
+            stat_value = (
+                math.floor(((2 * base + iv + ev_term) * level) / 100) + 5
+            )
+            # apply nature multiplier for non-HP stats
+            return math.floor(stat_value * nature_multiplier)
 
     st.header("Pokémon IV Calculator")
 
@@ -404,6 +471,11 @@ with IV_calculator:
 
     # ---- IV & EV inputs per stat ----
     st.subheader("IV and EV Inputs (per stat)")
+    st.caption(
+        f"Nature filter: {selected_nature}"
+        if apply_nature_filter
+        else "Nature filter: Off"
+    )
 
     iv_values = {}
     ev_values = {}
@@ -443,15 +515,26 @@ with IV_calculator:
         ev = ev_values[stat]
 
         is_hp = stat == "hp"
+        nature_multiplier = modifiers.get(stat, 1.0)
 
-        # Stat with 0 IV / 0 EV
+        # Stat with 0 IV / 0 EV (nature does not modify base comparison)
         base_val = compute_stat(
-            base_stat_value, iv=0, ev=0, level=level, is_hp=is_hp
+            base_stat_value,
+            iv=0,
+            ev=0,
+            level=level,
+            is_hp=is_hp,
+            nature_multiplier=1.0,
         )
 
         # Stat with chosen IV / EV
         modified_val = compute_stat(
-            base_stat_value, iv=iv, ev=ev, level=level, is_hp=is_hp
+            base_stat_value,
+            iv=iv,
+            ev=ev,
+            level=level,
+            is_hp=is_hp,
+            nature_multiplier=nature_multiplier,
         )
 
         base_stats.append(base_val)
@@ -489,16 +572,25 @@ with IV_calculator:
     )
 
     fig.update_layout(
+        width=400,
+        height=400,
         polar=dict(
             radialaxis=dict(
-                visible=True,
-                range=[0, max(radar_modified) * 1.1],
-            )
+                visible=False,  # hide radial axis
+                showline=False,
+                # showticklabels=False,
+                showgrid=False,
+            ),
+            angularaxis=dict(
+                # visible=False,  # hide angular axis
+                showline=False,
+                # showticklabels=False,
+                showgrid=False,
+            ),
+            bgcolor="white",  # background
         ),
-        showlegend=True,
-        margin=dict(l=40, r=40, t=40, b=40),
+        showlegend=False,
     )
-
     st.plotly_chart(fig, use_container_width=True)
 
     # ---- Numeric comparison table ----
