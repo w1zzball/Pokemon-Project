@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from utils.api import fetch_back_sprite, fetch_pokemon_data, fetch_front_sprite
 from utils.type_utils import type_effectiveness
-
+import math
 
 # TODO refactor into separate files
 
@@ -328,6 +328,20 @@ with statistics:
     st.markdown("### Statistics")
 
 with IV_calculator:
+
+    def compute_stat(
+        base: int, iv: int, ev: int, level: int, is_hp: bool
+    ) -> int:
+        ev_term = ev // 4
+        if is_hp:
+            return (
+                math.floor(((2 * base + iv + ev_term) * level) / 100)
+                + level
+                + 10
+            )
+        else:
+            return math.floor(((2 * base + iv + ev_term) * level) / 100) + 5
+
     st.header("Pokémon IV Calculator")
 
     stats = [
@@ -353,6 +367,9 @@ with IV_calculator:
 
     # ---- Inputs: Pokémon selection ----
     pokemon_name = st.selectbox("Pokémon", sorted(poke_data["name"].unique()))
+
+    # Level slider
+    level = st.slider("Level", min_value=1, max_value=100, value=50, step=1)
 
     # ---- Lookup row ----
     try:
@@ -391,21 +408,27 @@ with IV_calculator:
                 step=4,
             )
 
-    # ---- Compute modified stats (simplified model) ----
-    # Simplified formula: modified = base + IV + floor(EV / 4)
+    # ---- Compute stats at the chosen level ----
     base_stats = []
     modified_stats = []
     labels = []
 
     for stat in stats:
-        base_val = int(row[stat])
+        base_stat_value = int(row[stat])  # base stat from the dataset
         iv = iv_values[stat]
         ev = ev_values[stat]
 
-        delta_from_iv = iv
-        delta_from_ev = ev // 4
+        is_hp = stat == "hp"
 
-        modified_val = base_val + delta_from_iv + delta_from_ev
+        # Stat with 0 IV / 0 EV
+        base_val = compute_stat(
+            base_stat_value, iv=0, ev=0, level=level, is_hp=is_hp
+        )
+
+        # Stat with chosen IV / EV
+        modified_val = compute_stat(
+            base_stat_value, iv=iv, ev=ev, level=level, is_hp=is_hp
+        )
 
         base_stats.append(base_val)
         modified_stats.append(modified_val)
@@ -426,7 +449,7 @@ with IV_calculator:
             r=radar_base,
             theta=radar_labels,
             fill="toself",
-            name="Base stats",
+            name="Base stats (0 IV / 0 EV)",
             opacity=0.5,
         )
     )
@@ -454,14 +477,14 @@ with IV_calculator:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ---- Optional: show numeric table ----
+    # ---- Numeric comparison table ----
     st.subheader("Numeric Comparison")
     comparison_rows = []
     for label, base, mod in zip(labels, base_stats, modified_stats):
         comparison_rows.append(
             {
                 "Stat": label,
-                "Base": base,
+                "Base (0 IV / 0 EV)": base,
                 "With IV + EV": mod,
                 "Change": mod - base,
             }
