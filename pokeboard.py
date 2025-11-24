@@ -108,6 +108,7 @@ if apply_nature_filter:
 else:
     selected_nature = DEFAULT_NATURE
 
+
 # plotly radar
 def radar_chart(df, selected_pokemon_name, modifiers):
     pokemon = df[
@@ -426,7 +427,9 @@ with IV_calculator:
                 + 10
             )
         else:
-            stat_value = math.floor(((2 * base + iv + ev_term) * level) / 100) + 5
+            stat_value = (
+                math.floor(((2 * base + iv + ev_term) * level) / 100) + 5
+            )
             # apply nature multiplier for non-HP stats
             return math.floor(stat_value * nature_multiplier)
 
@@ -569,16 +572,25 @@ with IV_calculator:
     )
 
     fig.update_layout(
+        width=400,
+        height=400,
         polar=dict(
             radialaxis=dict(
-                visible=True,
-                range=[0, max(radar_modified) * 1.1],
-            )
+                visible=False,  # hide radial axis
+                showline=False,
+                # showticklabels=False,
+                showgrid=False,
+            ),
+            angularaxis=dict(
+                # visible=False,  # hide angular axis
+                showline=False,
+                # showticklabels=False,
+                showgrid=False,
+            ),
+            bgcolor="white",  # background
         ),
-        showlegend=True,
-        margin=dict(l=40, r=40, t=40, b=40),
+        showlegend=False,
     )
-
     st.plotly_chart(fig, use_container_width=True)
 
     # ---- Numeric comparison table ----
