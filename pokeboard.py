@@ -7,15 +7,16 @@ import plotly.graph_objects as go
 import math
 
 # TODO refactor into separate files
-
 # import data
 poke_data = pd.read_csv("data/cleaned_pokemon.csv")
 
 
 # set up streamlit
-# st.title("PokéBoard")
+st.title("PokéBoard")
 # st.subheader("An interactive Pokédex data explorer")
-# st.set_page_config(page_title="PokéBoard", layout="centered")
+st.set_page_config(page_title="PokéBoard")
+
+
 def normalize(series):
     return (series - series.min()) / (series.max() - series.min())
 
@@ -82,11 +83,21 @@ def radar_chart(df, selected_pokemon_name):
 
     fig = px.line_polar(
         r=values,
-        theta=categories,
+        theta=[
+            cat.replace("_norm", "")
+            .replace("sp_", "S.")
+            .replace("attack", "Atk")
+            .replace("defense", "Def")
+            .replace("speed", "Spd")
+            .replace("hp", "HP")
+            for cat in categories
+        ],
         line_close=True,
         color_discrete_sequence=["red"],
     )
     fig.update_layout(
+        width=400,
+        height=400,
         polar=dict(
             radialaxis=dict(
                 visible=False,  # hide radial axis
@@ -159,7 +170,7 @@ with overview:
         index=selectbox_pos,
         key="selected_pokemon_name_widget",
     )
-    with st.container(horizontal=True):
+    with st.container(horizontal=True, key="overview-main"):
         with st.container(key="radar"):
             st.plotly_chart(chart)
         with st.container(key="sprites-and-info"):
