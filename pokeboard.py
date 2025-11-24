@@ -1,8 +1,10 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 from utils.api import fetch_back_sprite, fetch_pokemon_data, fetch_front_sprite
 from utils.type_utils import type_effectiveness
+
 
 # TODO refactor into separate files
 
@@ -337,14 +339,14 @@ with IV_calculator:
         "speed",
     ]
 
-    # Map display labels to dataframe columns
-    STAT_COLUMN_MAP = {
-        "HP": "hp",
-        "Attack": "attack",
-        "Defense": "defense",
-        "Sp. Attack": "sp_attack",
-        "Sp. Defense": "sp_defense",
-        "Speed": "speed",
+    # Map dataframe column names -> display labels
+    STAT_LABELS = {
+        "hp": "HP",
+        "attack": "Attack",
+        "defense": "Defense",
+        "sp_attack": "Sp. Attack",
+        "sp_defense": "Sp. Defense",
+        "speed": "Speed",
     }
 
     st.header("Pokémon IV / EV Calculator (Radar View)")
